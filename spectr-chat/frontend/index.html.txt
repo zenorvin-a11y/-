@@ -1,36 +1,648 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>СПЕКТР Чат</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>СПЕКТР | Мессенджер</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
     <style>
-        body { font-family: Arial; margin: 20px; }
-        #chat { border: 2px solid #000; padding: 10px; height: 400px; overflow-y: scroll; }
-        .message { margin: 5px 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f172a; 
+            color: #f8fafc;
+            height: 100vh;
+            display: flex;
+        }
+        
+        /* Боковая панель */
+        .sidebar {
+            width: 280px;
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3b82f6;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .user-info {
+            background: #1e40af;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin: 20px 0 10px;
+            letter-spacing: 1px;
+        }
+        
+        .channel-list, .group-list {
+            list-style: none;
+        }
+        
+        .channel-item, .group-item {
+            padding: 12px 15px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .channel-item:hover, .group-item:hover {
+            background: #334155;
+        }
+        
+        .channel-item.active {
+            background: #3b82f6;
+        }
+        
+        .badge {
+            background: #10b981;
+            color: white;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: auto;
+        }
+        
+        /* Основной чат */
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid #334155;
+            background: #1e293b;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 15px;
+            position: relative;
+        }
+        
+        .message.outgoing {
+            background: #3b82f6;
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .message.incoming {
+            background: #334155;
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+        }
+        
+        .message-sender {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .message-content {
+            line-height: 1.4;
+        }
+        
+        .message-time {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 5px;
+            text-align: right;
+        }
+        
+        /* Панель ввода */
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #334155;
+            background: #1e293b;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+            border-radius: 10px;
+            font-size: 16px;
+        }
+        
+        .send-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0 30px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .send-btn:hover {
+            background: #2563eb;
+        }
+        
+        /* Модальные окна */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            border: 1px solid #334155;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #3b82f6;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            color: white;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #64748b;
+            color: white;
+        }
+        
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
-    <h1>🐱 СПЕКТР Чат</h1>
-    <div id="chat"></div>
-    <input id="input" placeholder="Сообщение">
-    <button onclick="send()">Отправить</button>
-
-    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
-    <script>
-        const socket = io('http://localhost:3000');
-        const user = 'Юзер' + Math.floor(Math.random() * 1000);
+    <!-- Боковая панель -->
+    <div class="sidebar">
+        <div class="logo">СПЕКТР</div>
         
-        socket.on('message', (data) => {
-            document.getElementById('chat').innerHTML += 
-                `<div class="message"><b>${data.user}:</b> ${data.text}</div>`;
+        <div class="user-info">
+            <div id="currentUser">Гость</div>
+            <div style="font-size: 12px; color: #cbd5e1;">Статус: <span id="userRole">Не авторизован</span></div>
+        </div>
+        
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="showRegisterModal()">Регистрация</button>
+            <button class="btn btn-secondary" onclick="showCreateChannelModal()">Создать канал</button>
+        </div>
+        
+        <div class="section-title">Каналы</div>
+        <ul class="channel-list" id="channelList">
+            <!-- Каналы будут здесь -->
+        </ul>
+        
+        <div class="section-title">Мои группы</div>
+        <ul class="group-list" id="groupList">
+            <!-- Группы будут здесь -->
+        </ul>
+        
+        <div class="section-title">Администраторы</div>
+        <ul class="admin-list" id="adminList">
+            <!-- Админы будут здесь -->
+        </ul>
+    </div>
+    
+    <!-- Основной чат -->
+    <div class="main-chat">
+        <div class="chat-header" id="chatHeader">
+            <h2>Выберите канал или группу</h2>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <!-- Сообщения будут здесь -->
+        </div>
+        
+        <div class="input-area">
+            <div class="input-container">
+                <input type="text" class="message-input" id="messageInput" placeholder="Введите сообщение..." disabled>
+                <button class="send-btn" id="sendButton" onclick="sendMessage()" disabled>Отправить</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно регистрации -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-title">Регистрация</div>
+            <div class="form-group">
+                <label class="form-label">Имя пользователя</label>
+                <input type="text" class="form-input" id="regUsername" placeholder="username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="regEmail" placeholder="email@example.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Пароль</label>
+                <input type="password" class="form-input" id="regPassword" placeholder="••••••••">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="registerUser()">Зарегистрироваться</button>
+                <button class="btn btn-secondary" onclick="hideRegisterModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно создания канала -->
+    <div class="modal" id="createChannelModal">
+        <div class="modal-content">
+            <div class="modal-title">Создать канал</div>
+            <div class="form-group">
+                <label class="form-label">Название канала</label>
+                <input type="text" class="form-input" id="channelName" placeholder="Общий чат">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <input type="text" class="form-input" id="channelDesc" placeholder="Описание канала">
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="channelPrivate"> Приватный канал
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="createChannel()">Создать</button>
+                <button class="btn btn-secondary" onclick="hideCreateChannelModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script>
+        // Конфигурация
+        const API_URL = 'https://your-backend.onrender.com'; // ЗАМЕНИ НА СВОЙ URL
+        let socket = null;
+        let currentUser = null;
+        let currentChannel = null;
+        let currentGroup = null;
+        
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadChannels();
+            await loadGroups();
+            connectWebSocket();
         });
         
-        function send() {
-            const input = document.getElementById('input');
-            socket.emit('message', {
-                user: user,
-                text: input.value
+        // WebSocket соединение
+        function connectWebSocket() {
+            socket = io(API_URL);
+            
+            socket.on('new_message', (message) => {
+                if ((currentChannel && message.channelId === currentChannel.id) ||
+                    (currentGroup && message.groupId === currentGroup.id)) {
+                    displayMessage(message);
+                }
             });
-            input.value = '';
+            
+            socket.on('connect', () => {
+                console.log('WebSocket connected');
+            });
+        }
+        
+        // Регистрация пользователя
+        async function registerUser() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            
+            if (!username || !email || !password) {
+                alert('Заполните все поля');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                
+                if (response.ok) {
+                    currentUser = await response.json();
+                    document.getElementById('currentUser').textContent = currentUser.username;
+                    document.getElementById('userRole').textContent = currentUser.role;
+                    hideRegisterModal();
+                    alert('Регистрация успешна!');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Ошибка регистрации');
+            }
+        }
+        
+        // Создание канала
+        async function createChannel() {
+            if (!currentUser) {
+                alert('Сначала зарегистрируйтесь');
+                return;
+            }
+            
+            const name = document.getElementById('channelName').value;
+            const description = document.getElementById('channelDesc').value;
+            const isPrivate = document.getElementById('channelPrivate').checked;
+            
+            if (!name) {
+                alert('Введите название канала');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/channels`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        isPrivate,
+                        creatorId: currentUser.id
+                    })
+                });
+                
+                if (response.ok) {
+                    const channel = await response.json();
+                    await loadChannels();
+                    hideCreateChannelModal();
+                    selectChannel(channel);
+                }
+            } catch (error) {
+                console.error('Create channel error:', error);
+            }
+        }
+        
+        // Загрузка каналов
+        async function loadChannels() {
+            try {
+                const response = await fetch(`${API_URL}/api/channels`);
+                const channels = await response.json();
+                
+                const channelList = document.getElementById('channelList');
+                channelList.innerHTML = '';
+                
+                channels.forEach(channel => {
+                    const li = document.createElement('li');
+                    li.className = 'channel-item';
+                    li.innerHTML = `
+                        <span># ${channel.name}</span>
+                        ${channel.isPrivate ? '<span class="badge">Приват</span>' : ''}
+                    `;
+                    li.onclick = () => selectChannel(channel);
+                    channelList.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Load channels error:', error);
+            }
+        }
+        
+        // Загрузка групп
+        async function loadGroups() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/users/${currentUser.id}/groups`);
+                const groups = await response.json();
+                
+                const groupList = document.getElementById('groupList');
+                groupList.innerHTML = '';
+                
+                groups.forEach(group => {
+                    const li = document.createElement('li');
+                    li.className = 'group-item';
+                    li.textContent = group.name;
+                    li.onclick = () => selectGroup(group);
+                    groupList.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Load groups error:', error);
+            }
+        }
+        
+        // Выбор канала
+        function selectChannel(channel) {
+            currentChannel = channel;
+            currentGroup = null;
+            
+            document.getElementById('chatHeader').innerHTML = `
+                <h2># ${channel.name}</h2>
+                <p style="color: #94a3b8; font-size: 14px;">${channel.description || ''}</p>
+            `;
+            
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('messageInput').placeholder = `Сообщение в #${channel.name}...`;
+            
+            loadChannelMessages(channel.id);
+            
+            // Подключаемся к WebSocket комнате
+            if (socket) {
+                socket.emit('join_channel', channel.id);
+            }
+        }
+        
+        // Загрузка сообщений канала
+        async function loadChannelMessages(channelId) {
+            try {
+                const response = await fetch(`${API_URL}/api/channels/${channelId}/messages`);
+                const messages = await response.json();
+                
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = '';
+                
+                messages.forEach(msg => displayMessage(msg));
+            } catch (error) {
+                console.error('Load messages error:', error);
+            }
+        }
+        
+        // Отправка сообщения
+        async function sendMessage() {
+            if (!currentUser) {
+                alert('Сначала зарегистрируйтесь');
+                return;
+            }
+            
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            
+            if (!content) return;
+            
+            const messageData = {
+                senderId: currentUser.id,
+                content,
+                channelId: currentChannel ? currentChannel.id : null,
+                groupId: currentGroup ? currentGroup.id : null,
+                senderName: currentUser.username
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/api/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(messageData)
+                });
+                
+                if (response.ok) {
+                    input.value = '';
+                    
+                    // Сообщение добавится через WebSocket
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Send message error:', error);
+            }
+        }
+        
+        // Отображение сообщения
+        function displayMessage(message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            
+            const isOutgoing = currentUser && message.senderId === currentUser.id;
+            messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
+            
+            const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            messageDiv.innerHTML = `
+                <div class="message-sender">${message.senderName || 'Пользователь'}</div>
+                <div class="message-content">${message.content}</div>
+                <div class="message-time">${time}</div>
+            `;
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Управление модальными окнами
+        function showRegisterModal() {
+            document.getElementById('registerModal').style.display = 'flex';
+        }
+        
+        function hideRegisterModal() {
+            document.getElementById('registerModal').style.display = 'none';
+        }
+        
+        function showCreateChannelModal() {
+            if (!currentUser) {
+                alert('Сначала зарегистрируйтесь');
+                return;
+            }
+            document.getElementById('createChannelModal').style.display = 'flex';
+        }
+        
+        function hideCreateChannelModal() {
+            document.getElementById('createChannelModal').style.display = 'none';
+        }
+        
+        // Горячие клавиши
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        // Админ-функции (для примера)
+        async function promoteToAdmin(userId) {
+            if (!currentUser || currentUser.role !== 'admin') {
+                alert('Только админы могут назначать других админов');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/admin/promote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId,
+                        promoterId: currentUser.id
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Пользователь стал админом');
+                }
+            } catch (error) {
+                console.error('Promote error:', error);
+            }
         }
     </script>
 </body>
