@@ -1,7 +1,7 @@
 {
-  "name": "frontend",
+  "name": "spectr-frontend",
   "version": "1.0.0",
   "scripts": {
-    "start": "echo 'Открой index.html в браузере'"
+    "start": "npx serve ."
   }
 }
