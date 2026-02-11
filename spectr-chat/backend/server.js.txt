@@ -4,24 +4,142 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
   cors: { origin: "*" }
 });
+const cors = require('cors');
 
-app.use(require('cors')());
+app.use(cors());
+app.use(express.json());
 
-// Главная страница
-app.get('/', (req, res) => {
-  res.send('Сервер работает!');
+// === БАЗА ДАННЫХ В ПАМЯТИ (для демо) ===
+let users = [];
+let channels = [];
+let groups = [];
+let messages = [];
+let admins = [];
+
+// === API ЭНДПОИНТЫ ===
+
+// 1. Регистрация
+app.post('/api/register', (req, res) => {
+  const { username, email, password } = req.body;
+  const user = {
+    id: users.length + 1,
+    username,
+    email,
+    role: 'user',
+    createdAt: new Date()
+  };
+  users.push(user);
+  res.json(user);
 });
 
-// Чат
-io.on('connection', (socket) => {
-  console.log('Новый юзер');
+// 2. Создание канала
+app.post('/api/channels', (req, res) => {
+  const { name, description, isPrivate, creatorId } = req.body;
+  const channel = {
+    id: channels.length + 1,
+    name,
+    description,
+    isPrivate: isPrivate || false,
+    creatorId,
+    members: [creatorId],
+    createdAt: new Date()
+  };
+  channels.push(channel);
+  res.json(channel);
+});
+
+// 3. Создание группы
+app.post('/api/groups', (req, res) => {
+  const { name, description, creatorId, members } = req.body;
+  const group = {
+    id: groups.length + 1,
+    name,
+    description,
+    creatorId,
+    members: [...(members || []), creatorId],
+    createdAt: new Date()
+  };
+  groups.push(group);
+  res.json(group);
+});
+
+// 4. Получить все каналы
+app.get('/api/channels', (req, res) => {
+  res.json(channels.filter(c => !c.isPrivate));
+});
+
+// 5. Получить все группы пользователя
+app.get('/api/users/:userId/groups', (req, res) => {
+  const userId = parseInt(req.params.userId);
+  const userGroups = groups.filter(g => g.members.includes(userId));
+  res.json(userGroups);
+});
+
+// 6. Отправить сообщение
+app.post('/api/messages', (req, res) => {
+  const { senderId, content, channelId, groupId, isPrivate } = req.body;
+  const message = {
+    id: messages.length + 1,
+    senderId,
+    content,
+    channelId: channelId || null,
+    groupId: groupId || null,
+    isPrivate: isPrivate || false,
+    timestamp: new Date()
+  };
+  messages.push(message);
   
-  socket.on('message', (data) => {
-    io.emit('message', data);
+  // WebSocket рассылка
+  io.emit('new_message', message);
+  
+  res.json(message);
+});
+
+// 7. Получить сообщения канала
+app.get('/api/channels/:channelId/messages', (req, res) => {
+  const channelId = parseInt(req.params.channelId);
+  const channelMessages = messages.filter(m => m.channelId === channelId);
+  res.json(channelMessages);
+});
+
+// 8. Назначить админа
+app.post('/api/admin/promote', (req, res) => {
+  const { userId, promoterId } = req.body;
+  
+  // Проверка прав (пропускаем для демо)
+  const user = users.find(u => u.id === userId);
+  if (user) {
+    user.role = 'admin';
+    admins.push(userId);
+    res.json({ success: true, user });
+  } else {
+    res.status(404).json({ error: 'User not found' });
+  }
+});
+
+// === WebSocket ===
+io.on('connection', (socket) => {
+  console.log('User connected');
+  
+  socket.on('join_channel', (channelId) => {
+    socket.join(`channel_${channelId}`);
+  });
+  
+  socket.on('join_group', (groupId) => {
+    socket.join(`group_${groupId}`);
+  });
+  
+  socket.on('send_message', (data) => {
+    io.to(`channel_${data.channelId}`).emit('new_message', data);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
   });
 });
 
-// Запуск
-http.listen(3000, () => {
-  console.log('Сервер на порту 3000');
+// === ЗАПУСК СЕРВЕРА ===
+const PORT = process.env.PORT || 10000;
+http.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
