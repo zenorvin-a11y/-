@@ -1,0 +1,13 @@
+-- База для чата
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    email VARCHAR(100)
+);
+
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER,
+    text TEXT,
+    time TIMESTAMP DEFAULT NOW()
+);

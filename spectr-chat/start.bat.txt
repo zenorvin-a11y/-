@@ -1,0 +1,7 @@
+@echo off
+echo Запуск СПЕКТР...
+cd backend
+npm install
+start cmd /k "node server.js"
+echo Сервер запущен. Открой frontend/index.html
+pause

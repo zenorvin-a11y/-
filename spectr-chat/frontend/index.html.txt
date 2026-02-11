@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>СПЕКТР Чат</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        #chat { border: 2px solid #000; padding: 10px; height: 400px; overflow-y: scroll; }
+        .message { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>🐱 СПЕКТР Чат</h1>
+    <div id="chat"></div>
+    <input id="input" placeholder="Сообщение">
+    <button onclick="send()">Отправить</button>
+
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script>
+        const socket = io('http://localhost:3000');
+        const user = 'Юзер' + Math.floor(Math.random() * 1000);
+        
+        socket.on('message', (data) => {
+            document.getElementById('chat').innerHTML += 
+                `<div class="message"><b>${data.user}:</b> ${data.text}</div>`;
+        });
+        
+        function send() {
+            const input = document.getElementById('input');
+            socket.emit('message', {
+                user: user,
+                text: input.value
+            });
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
